@@ -1,0 +1,29 @@
+experiment_name: sarcasm_transformer_base
+
+seed: 42
+
+data:
+  dataset_name: "sarcasm_demo"
+  train_path: "data/processed/train.csv"
+  val_path: "data/processed/val.csv"
+  test_path: "data/processed/test.csv"
+  text_column: "text"
+  label_column: "label"
+
+model:
+  pretrained_model_name_or_path: "bert-base-uncased"
+  num_labels: 2
+
+training:
+  batch_size: 32
+  num_epochs: 3
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_seq_length: 128
+
+logging:
+  log_steps: 50
+  output_dir: "outputs"
+  save_total_limit: 3
+

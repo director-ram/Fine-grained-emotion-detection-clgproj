@@ -1,0 +1,30 @@
+experiment_name: multitask_tweets
+
+seed: 42
+
+data:
+  sarcasm_train_path: "data/sarcasm/train.csv"
+  sarcasm_val_path: "data/sarcasm/val.csv"
+  emotion_train_path: "data/emotion/train.csv"
+  emotion_val_path: "data/emotion/val.csv"
+
+model:
+  pretrained_model_name_or_path: "bert-base-uncased"
+  num_sarcasm_labels: 2
+  num_emotion_labels: 6
+  lambda_sarcasm: 1.0
+  lambda_emotion: 1.0
+
+training:
+  batch_size: 32
+  num_epochs: 3
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_seq_length: 128
+
+logging:
+  log_steps: 100
+  output_dir: "outputs"
+  save_total_limit: 3
+
