@@ -24,6 +24,7 @@ from src.data_loading import (
     load_sarcasm_csv,
 )
 from src.models.multitask_classifier import MultiTaskConfig, build_multitask_model
+import json
 
 
 @dataclass
@@ -59,6 +60,25 @@ def main(cfg: MultiTaskTrainConfig) -> None:
     sarcasm_val = load_sarcasm_csv(Path(data_cfg["sarcasm_val_path"]))
     emotion_train = load_emotion_csv(Path(data_cfg["emotion_train_path"]))
     emotion_val = load_emotion_csv(Path(data_cfg["emotion_val_path"]))
+
+    max_train_per_task = train_cfg.get("max_train_samples_per_task")
+    max_val_per_task = train_cfg.get("max_val_samples_per_task")
+    if max_train_per_task is not None:
+        max_train_per_task = int(max_train_per_task)
+        sarcasm_train = sarcasm_train.sample(
+            n=min(max_train_per_task, len(sarcasm_train)), random_state=seed
+        )
+        emotion_train = emotion_train.sample(
+            n=min(max_train_per_task, len(emotion_train)), random_state=seed
+        )
+    if max_val_per_task is not None:
+        max_val_per_task = int(max_val_per_task)
+        sarcasm_val = sarcasm_val.sample(
+            n=min(max_val_per_task, len(sarcasm_val)), random_state=seed
+        )
+        emotion_val = emotion_val.sample(
+            n=min(max_val_per_task, len(emotion_val)), random_state=seed
+        )
 
     tokenizer = build_tokenizer(model_cfg["pretrained_model_name_or_path"])
     max_seq_length = int(train_cfg.get("max_seq_length", 128))
@@ -154,6 +174,17 @@ def main(cfg: MultiTaskTrainConfig) -> None:
     best_model_dir = output_dir / "best_model_multitask"
     trainer.save_model(str(best_model_dir))
     tokenizer.save_pretrained(str(best_model_dir))
+
+    # Save minimal multi-task metadata so eval/predict can reconstruct the model correctly.
+    multitask_cfg_path = best_model_dir / "multitask_config.json"
+    multitask_cfg = {
+        "pretrained_model_name_or_path": model_cfg["pretrained_model_name_or_path"],
+        "num_sarcasm_labels": int(model_cfg.get("num_sarcasm_labels", 2)),
+        "num_emotion_labels": int(model_cfg.get("num_emotion_labels", 6)),
+        "lambda_sarcasm": float(model_cfg.get("lambda_sarcasm", 1.0)),
+        "lambda_emotion": float(model_cfg.get("lambda_emotion", 1.0)),
+    }
+    multitask_cfg_path.write_text(json.dumps(multitask_cfg, indent=2), encoding="utf-8")
 
     print(f"Multi-task training complete. Best model saved to {best_model_dir}")
 

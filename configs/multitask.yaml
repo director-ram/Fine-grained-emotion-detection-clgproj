@@ -16,12 +16,14 @@ model:
   lambda_emotion: 1.0
 
 training:
-  batch_size: 32
-  num_epochs: 3
+  batch_size: 16
+  num_epochs: 1
   learning_rate: 2e-5
   weight_decay: 0.01
   warmup_ratio: 0.1
-  max_seq_length: 128
+  max_seq_length: 64
+  max_train_samples_per_task: 200
+  max_val_samples_per_task: 100
 
 logging:
   log_steps: 100

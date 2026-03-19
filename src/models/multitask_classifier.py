@@ -78,12 +78,15 @@ class MultiTaskSequenceClassifier(PreTrainedModel):
         loss_emo_val: Optional[torch.Tensor] = None
 
         if sarcasm_labels is not None:
-            loss_sarc_val = self.loss_sarcasm(logits_sarc, sarcasm_labels)
+            # CrossEntropyLoss(ignore_index=-100) returns NaN if *all* targets are ignored.
+            if torch.any(sarcasm_labels != -100):
+                loss_sarc_val = self.loss_sarcasm(logits_sarc, sarcasm_labels)
         if emotion_labels is not None:
-            loss_emo_val = self.loss_emotion(logits_emo, emotion_labels)
+            if torch.any(emotion_labels != -100):
+                loss_emo_val = self.loss_emotion(logits_emo, emotion_labels)
 
         if loss_sarc_val is not None or loss_emo_val is not None:
-            loss = 0.0
+            loss = torch.zeros((), device=logits_sarc.device)
             if loss_sarc_val is not None:
                 loss = loss + self.cfg.lambda_sarcasm * loss_sarc_val
             if loss_emo_val is not None:

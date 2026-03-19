@@ -63,7 +63,7 @@ The best model checkpoint will be saved under `outputs/<experiment_name>/best_mo
 After running `scripts/download_public_datasets.py`, you can train the multi-task model with:
 
 ```bash
-python -m src.training.train_multitask --config-path configs/multitask.yaml
+python -m src.training.train_multitask --cfg.config-path configs/multitask.yaml
 ```
 
 This uses a shared BERT encoder with two heads (sarcasm + emotion) and saves the best multi-task checkpoint under:

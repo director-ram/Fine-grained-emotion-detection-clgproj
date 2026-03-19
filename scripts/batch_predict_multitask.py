@@ -6,7 +6,9 @@ import argparse
 import sys
 
 import pandas as pd  # pyright: ignore[reportMissingImports]
+import json
 import torch
+from safetensors.torch import load_file as safetensors_load_file  # pyright: ignore[reportMissingImports]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -17,18 +19,49 @@ from src.models.multitask_classifier import (  # noqa: E402
     MultiTaskConfig,
     MultiTaskSequenceClassifier,
 )
+from transformers import DataCollatorWithPadding  # noqa: E402
+
+
+def _load_state_dict(model_dir: Path) -> dict:
+    safetensors_path = model_dir / "model.safetensors"
+    if safetensors_path.exists():
+        return safetensors_load_file(str(safetensors_path))
+
+    bin_path = model_dir / "pytorch_model.bin"
+    if bin_path.exists():
+        return torch.load(bin_path, map_location="cpu")
+
+    raise FileNotFoundError(
+        f"Could not find model weights in {model_dir}. "
+        f"Expected either '{safetensors_path.name}' or '{bin_path.name}'."
+    )
 
 
 def load_model_and_tokenizer(model_dir: Path) -> tuple[MultiTaskSequenceClassifier, any]:
     tokenizer = build_tokenizer(str(model_dir))
-    cfg = MultiTaskConfig(pretrained_model_name_or_path=str(model_dir))
+    multitask_cfg_path = model_dir / "multitask_config.json"
+    if multitask_cfg_path.exists():
+        multitask_cfg = json.loads(multitask_cfg_path.read_text(encoding="utf-8"))
+        cfg = MultiTaskConfig(
+            pretrained_model_name_or_path=str(multitask_cfg["pretrained_model_name_or_path"]),
+            num_sarcasm_labels=int(multitask_cfg.get("num_sarcasm_labels", 2)),
+            num_emotion_labels=int(multitask_cfg.get("num_emotion_labels", 6)),
+            lambda_sarcasm=float(multitask_cfg.get("lambda_sarcasm", 1.0)),
+            lambda_emotion=float(multitask_cfg.get("lambda_emotion", 1.0)),
+        )
+    else:
+        cfg = MultiTaskConfig(pretrained_model_name_or_path="bert-base-uncased")
     model = MultiTaskSequenceClassifier(cfg)
-    state_dict = torch.load(model_dir / "pytorch_model.bin", map_location="cpu")
-    model.load_state_dict(state_dict)
+    state_dict = _load_state_dict(model_dir)
+    model.load_state_dict(state_dict, strict=False)
     return model, tokenizer
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        # Windows terminals can default to legacy encodings; avoid crashing on emojis.
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description="Batch multi-task sarcasm + emotion prediction.")
     parser.add_argument(
         "--model-dir",
@@ -81,12 +114,17 @@ def main() -> None:
 
     from torch.utils.data import DataLoader  # local import to avoid global dependency
 
-    loader = DataLoader(dataset, batch_size=32)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    loader = DataLoader(dataset, batch_size=32, collate_fn=data_collator)
 
     with torch.no_grad():
         idx_offset = 0
         for batch in loader:
-            inputs = {k: v.to(device) for k, v in batch.items() if k in ("input_ids", "attention_mask", "token_type_ids")}
+            inputs = {
+                k: v.to(device)
+                for k, v in batch.items()
+                if k not in ("sarcasm_labels", "emotion_labels")
+            }
             outputs = model(**inputs)
             logits_sarc = outputs["logits_sarcasm"]
             logits_emo = outputs["logits_emotion"]
