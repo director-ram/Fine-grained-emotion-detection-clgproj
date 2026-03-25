@@ -90,6 +90,10 @@ python -m src.training.eval_multitask --model-dir outputs/multitask_tweets/best_
 python -m src.inference.predict --model-dir outputs/<experiment_name>/best_model --text "Oh great, another bug in production."
 ```
 
+By default, the CLI prints exactly one line:
+- `yes, its sarcastic`
+- `no, its not sarcastic`
+
 For batch multi-task predictions (sarcasm + emotion) over a CSV of tweets:
 
 ```bash
@@ -113,6 +117,35 @@ curl -X POST "http://127.0.0.1:8000/predict" ^
   -d "{\"text\": \"Yeah, because I love waiting in traffic.\"}"
 ```
 
-The response includes `sarcastic` (boolean), `label`, and `score`.
+The response includes `sarcastic` (boolean), `label`, `score`, and `message`.
+
+### 6. Start the Frontend UI
+The frontend is a small React+Vite app that calls your FastAPI `POST /predict` endpoint.
+
+1. Start the backend (port `8000`):
+```bash
+uvicorn src.api.server:app --reload
+```
+
+2. Start the frontend (Vite dev server on port `5173`):
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+3. Quick API check (same as above):
+```bash
+curl -X POST "http://127.0.0.1:8000/predict" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"text\": \"Yeah, because I love waiting in traffic.\"}"
+```
+
+4. UI check:
+Open `http://localhost:5173`, paste a sentence (sarcastic or not), click `Analyze`, and you should see only:
+- `yes, its sarcastic`
+- `no, its not sarcastic`
+
+If you need a different backend URL, create `frontend/.env` with `VITE_API_BASE_URL` (default `http://localhost:8000`).
 
 

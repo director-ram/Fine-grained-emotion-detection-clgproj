@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --bg: #07060b;
+    --panel: rgba(255, 255, 255, 0.06);
+    --panel2: rgba(255, 255, 255, 0.09);
+    --stroke: rgba(255, 255, 255, 0.14);
+    --text: rgba(255, 255, 255, 0.86);
+    --muted: rgba(255, 255, 255, 0.66);
+    --accent: #c084fc;
+    --accent2: #22d3ee;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #faf8ff;
+      --panel: rgba(5, 4, 12, 0.04);
+      --panel2: rgba(5, 4, 12, 0.06);
+      --stroke: rgba(5, 4, 12, 0.12);
+      --text: rgba(12, 10, 20, 0.86);
+      --muted: rgba(12, 10, 20, 0.62);
+      --accent: #7c3aed;
+      --accent2: #0891b2;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: Manrope, system-ui, -apple-system, Segoe UI, sans-serif;
+    background:
+      radial-gradient(900px 600px at 15% 10%, rgba(192, 132, 252, 0.22), transparent 50%),
+      radial-gradient(900px 600px at 85% 5%, rgba(34, 211, 238, 0.18), transparent 52%),
+      radial-gradient(900px 600px at 60% 90%, rgba(124, 58, 237, 0.15), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    letter-spacing: 0.08px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', Manrope, system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@keyframes resultPop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.result-reveal {
+  animation: resultPop 450ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}

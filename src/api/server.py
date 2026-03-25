@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -17,10 +19,26 @@ class PredictResponse(BaseModel):
     sarcastic: bool
     label: str
     score: float
+    message: str
 
 
 def create_app(model_dir: Optional[Path] = None) -> FastAPI:
     app = FastAPI(title="Sarcasm Detection API")
+
+    # Allow browser-based clients (e.g., Vite dev server) to call this API.
+    # You can extend `allow_origins` for production by setting a stricter list.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+        ],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Use a simple attribute on app state to cache the predictor
     predictor: Optional[SarcasmPredictor] = None
@@ -34,7 +52,10 @@ def create_app(model_dir: Optional[Path] = None) -> FastAPI:
                 f"Model directory {resolved_model_dir} does not exist. "
                 "Train a model first or point the API to an existing checkpoint."
             )
-        predictor = SarcasmPredictor(InferenceConfig(model_dir=resolved_model_dir))
+        # Keep API inference fast for interactive usage (browser UI).
+        predictor = SarcasmPredictor(
+            InferenceConfig(model_dir=resolved_model_dir, max_seq_length=64)
+        )
 
     @app.post("/predict", response_model=PredictResponse)
     async def predict(req: PredictRequest) -> PredictResponse:
@@ -46,7 +67,13 @@ def create_app(model_dir: Optional[Path] = None) -> FastAPI:
 
         label, score = predictor.predict(req.text)
         sarcastic = label == "sarcastic"
-        return PredictResponse(sarcastic=sarcastic, label=label, score=score)
+        message = "yes, its sarcastic" if sarcastic else "no, its not sarcastic"
+        return PredictResponse(
+            sarcastic=sarcastic,
+            label=label,
+            score=score,
+            message=message,
+        )
 
     return app
 

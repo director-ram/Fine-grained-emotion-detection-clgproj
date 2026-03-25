@@ -67,14 +67,22 @@ def _cli() -> None:
         default=128,
         help="Maximum sequence length for tokenization.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print extra debug lines (Text/Prediction/score).",
+    )
     args = parser.parse_args()
 
     predictor = SarcasmPredictor(
         InferenceConfig(model_dir=args.model_dir, max_seq_length=args.max_seq_length)
     )
     label, score = predictor.predict(args.text)
-    print(f"Text: {args.text}")
-    print(f"Prediction: {label} (score={score:.4f})")
+    message = "yes, its sarcastic" if label == "sarcastic" else "no, its not sarcastic"
+    if args.verbose:
+        print(f"Text: {args.text}")
+        print(f"Prediction: {label} (score={score:.4f})")
+    print(message)
 
 
 if __name__ == "__main__":
