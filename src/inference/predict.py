@@ -40,9 +40,9 @@ class SarcasmPredictor:
         encoded = {k: v.to(self.device) for k, v in encoded.items()}
         outputs = self.model(**encoded)
         probs = outputs.logits.softmax(dim=-1).squeeze(0)
-        score, label_idx = torch.max(probs, dim=-1)
-        label_name = LABELS[int(label_idx)]
-        return label_name, float(score)
+        sarcastic_prob = float(probs[1].item())
+        label_name = "sarcastic" if sarcastic_prob >= 0.5 else "non-sarcastic"
+        return label_name, sarcastic_prob
 
 
 def _cli() -> None:

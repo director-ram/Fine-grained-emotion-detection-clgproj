@@ -14,6 +14,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
+from transformers import DataCollatorWithPadding
 
 from src.data_loading import build_tokenizer, tokenize_dataframe
 from src.models.sarcasm_classifier import load_finetuned_model
@@ -41,7 +42,8 @@ def evaluate(cfg: EvalConfig) -> Dict[str, float]:
     model.to(device)
     model.eval()
 
-    loader = DataLoader(test_dataset, batch_size=32)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    loader = DataLoader(test_dataset, batch_size=32, collate_fn=data_collator)
 
     all_labels = []
     all_preds = []

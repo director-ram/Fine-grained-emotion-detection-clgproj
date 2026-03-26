@@ -29,12 +29,8 @@ def create_app(model_dir: Optional[Path] = None) -> FastAPI:
     # You can extend `allow_origins` for production by setting a stricter list.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:5174",
-            "http://127.0.0.1:5174",
-        ],
+        # Dev-friendly: allow any localhost port (Vite may auto-pick 5174, 5175, ...)
+        allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
