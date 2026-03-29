@@ -38,3 +38,4 @@ outputs/
 
 #college report document
 Main_project_sample.docx
+scripts/generate-main_project_docx.py
