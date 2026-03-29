@@ -48,10 +48,7 @@ def create_app(model_dir: Optional[Path] = None) -> FastAPI:
                 f"Model directory {resolved_model_dir} does not exist. "
                 "Train a model first or point the API to an existing checkpoint."
             )
-        # Keep API inference fast for interactive usage (browser UI).
-        predictor = SarcasmPredictor(
-            InferenceConfig(model_dir=resolved_model_dir, max_seq_length=64)
-        )
+        predictor = SarcasmPredictor(InferenceConfig(model_dir=resolved_model_dir))
 
     @app.post("/predict", response_model=PredictResponse)
     async def predict(req: PredictRequest) -> PredictResponse:

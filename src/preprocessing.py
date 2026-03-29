@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-import pandas as pd
+import pandas as pd  # pyright: ignore[reportMissingImports]
 
 
 @dataclass

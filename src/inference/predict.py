@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Tuple
 
@@ -16,7 +17,8 @@ LABELS = ["non-sarcastic", "sarcastic"]
 @dataclass
 class InferenceConfig:
     model_dir: Path
-    max_seq_length: int = 128
+    max_seq_length: int | None = None
+    threshold: float | None = None
 
 
 class SarcasmPredictor:
@@ -27,6 +29,17 @@ class SarcasmPredictor:
         self.model.to(self.device)
         self.model.eval()
         self.tokenizer = build_tokenizer(str(cfg.model_dir))
+        inference_cfg_path = cfg.model_dir / "inference_config.json"
+        disk_cfg = {}
+        if inference_cfg_path.exists():
+            with inference_cfg_path.open("r", encoding="utf-8") as f:
+                disk_cfg = json.load(f)
+        self.max_seq_length = int(
+            cfg.max_seq_length if cfg.max_seq_length is not None else disk_cfg.get("max_seq_length", 128)
+        )
+        self.threshold = float(
+            cfg.threshold if cfg.threshold is not None else disk_cfg.get("threshold", 0.5)
+        )
 
     @torch.inference_mode()
     def predict(self, text: str) -> Tuple[str, float]:
@@ -34,14 +47,14 @@ class SarcasmPredictor:
             text,
             truncation=True,
             padding="max_length",
-            max_length=self.cfg.max_seq_length,
+            max_length=self.max_seq_length,
             return_tensors="pt",
         )
         encoded = {k: v.to(self.device) for k, v in encoded.items()}
         outputs = self.model(**encoded)
         probs = outputs.logits.softmax(dim=-1).squeeze(0)
         sarcastic_prob = float(probs[1].item())
-        label_name = "sarcastic" if sarcastic_prob >= 0.5 else "non-sarcastic"
+        label_name = "sarcastic" if sarcastic_prob >= self.threshold else "non-sarcastic"
         return label_name, sarcastic_prob
 
 
@@ -64,8 +77,14 @@ def _cli() -> None:
     parser.add_argument(
         "--max-seq-length",
         type=int,
-        default=128,
-        help="Maximum sequence length for tokenization.",
+        default=None,
+        help="Maximum sequence length for tokenization (default: from model inference_config.json).",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="Sarcasm probability threshold (default: from model inference_config.json, fallback 0.5).",
     )
     parser.add_argument(
         "--verbose",
@@ -75,7 +94,11 @@ def _cli() -> None:
     args = parser.parse_args()
 
     predictor = SarcasmPredictor(
-        InferenceConfig(model_dir=args.model_dir, max_seq_length=args.max_seq_length)
+        InferenceConfig(
+            model_dir=args.model_dir,
+            max_seq_length=args.max_seq_length,
+            threshold=args.threshold,
+        )
     )
     label, score = predictor.predict(args.text)
     message = "yes, its sarcastic" if label == "sarcastic" else "no, its not sarcastic"

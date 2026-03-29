@@ -57,6 +57,11 @@ python -m src.training.train --config-path configs/base.yaml
 ```
 
 The best model checkpoint will be saved under `outputs/<experiment_name>/best_model`.
+Training now logs train/val label distributions and stores `inference_config.json`
+with:
+- `max_seq_length` (used by CLI/API inference),
+- class weights used during training,
+- default threshold metadata.
 
 ### 2b. Train a multi-task sarcasm + emotion model on tweets
 
@@ -77,6 +82,9 @@ python -m src.training.eval --model-dir outputs/<experiment_name>/best_model --t
 ```
 
 This prints metrics, a confusion matrix, and a classification report.
+It also calibrates a sarcasm threshold from `data/processed/val.csv` by default,
+logs predicted-positive rate (to detect collapse), and saves the threshold to:
+- `outputs/<experiment_name>/best_model/inference_config.json`
 
 To evaluate the multi-task model on both sarcasm and emotion tweet test sets:
 
@@ -93,6 +101,15 @@ python -m src.inference.predict --model-dir outputs/<experiment_name>/best_model
 By default, the CLI prints exactly one line:
 - `yes, its sarcastic`
 - `no, its not sarcastic`
+
+By default, CLI and API both load `max_seq_length` and calibrated `threshold`
+from `inference_config.json` in the model directory.
+
+Optional smoke gate before release:
+```bash
+python scripts/smoke_test_single_task.py --model-dir outputs/<experiment_name>/best_model
+```
+This fails if predictions collapse to one class across a balanced mini smoke set.
 
 For batch multi-task predictions (sarcasm + emotion) over a CSV of tweets:
 
