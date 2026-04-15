@@ -3,6 +3,8 @@ export type PredictResponse = {
   label: string
   score: number
   message: string
+  /** "llm" = OpenAI-compatible (LM Studio); scores are 0 or 1. "local" = transformer probability. */
+  source?: 'llm' | 'local' | string
 }
 
 const DEFAULT_API_BASE_URL = 'http://localhost:8000'

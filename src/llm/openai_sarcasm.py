@@ -3,20 +3,25 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Tuple
 
+from src.llm.sarcasm_llm_prompt import SARCASM_SYSTEM_PROMPT
+
 
 @dataclass
 class OpenAISarcasmConfig:
     api_key: str
     model: str = "gpt-4o-mini"
-    temperature: float = 0.1
+    temperature: float = 0.0
     timeout_s: float = 30.0
     base_url: str = "https://api.openai.com/v1"
+    max_retries: int = 1
 
 
 def _join_url(base_url: str, path: str) -> str:
@@ -46,13 +51,8 @@ class OpenAISarcasmClassifier:
         self.cfg = cfg
 
     def predict(self, text: str) -> Tuple[str, float]:
-        system = (
-            "You are a strict sarcasm classifier.\n"
-            "Given a single sentence, output ONLY a JSON object with keys:\n"
-            '  {"label": "sarcastic"|"non-sarcastic"}\n'
-            "No extra text."
-        )
-        user = f"Sentence: {text}"
+        system = SARCASM_SYSTEM_PROMPT
+        user = f"Sentence: {text}\n\nIf unsure, respond with label non-sarcastic."
 
         payload = {
             "model": self.cfg.model,
@@ -62,6 +62,21 @@ class OpenAISarcasmClassifier:
                 {"role": "user", "content": user},
             ],
         }
+
+        # Fast reachability check (helps avoid long OS-level connect hangs on Windows).
+        try:
+            parsed_base = urllib.parse.urlparse(self.cfg.base_url)
+            host = parsed_base.hostname
+            port = parsed_base.port or (443 if parsed_base.scheme == "https" else 80)
+            if host:
+                with socket.create_connection((host, port), timeout=min(2.0, float(self.cfg.timeout_s))):
+                    pass
+        except OSError as e:
+            raise RuntimeError(
+                "LLM server is not reachable. "
+                f"Check LM Studio server at {self.cfg.base_url!r}. "
+                f"(connect_error={e})"
+            ) from e
 
         req = urllib.request.Request(
             url=_join_url(self.cfg.base_url, "/chat/completions"),
@@ -75,21 +90,38 @@ class OpenAISarcasmClassifier:
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(req, timeout=self.cfg.timeout_s) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as e:
-            body = ""
+        last_err: Exception | None = None
+        for attempt in range(self.cfg.max_retries + 1):
             try:
-                body = e.read().decode("utf-8", errors="replace")
-            except Exception:
+                with urllib.request.urlopen(req, timeout=self.cfg.timeout_s) as resp:
+                    raw = resp.read().decode("utf-8", errors="replace")
+                last_err = None
+                break
+            except urllib.error.HTTPError as e:
+                # Don't retry most HTTP errors (model/server will repeat).
                 body = ""
-            detail = f"LLM HTTP {e.code}: {e.reason}"
-            if body:
-                detail = f"{detail} (body={body})"
-            raise RuntimeError(detail) from e
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"LLM request failed: {e}") from e
+                try:
+                    body = e.read().decode("utf-8", errors="replace")
+                except Exception:
+                    body = ""
+                detail = f"LLM HTTP {e.code}: {e.reason}"
+                if body:
+                    detail = f"{detail} (body={body})"
+                raise RuntimeError(detail) from e
+            except urllib.error.URLError as e:
+                last_err = e
+                if attempt < self.cfg.max_retries:
+                    # Small backoff for transient network hiccups.
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise RuntimeError(
+                    "LLM request failed: "
+                    f"{e}. Check that LM Studio server is reachable at {self.cfg.base_url!r} "
+                    "and that the host/port are allowed by firewall."
+                ) from e
+
+        if last_err is not None:
+            raise RuntimeError(f"LLM request failed: {last_err}") from last_err
         data = json.loads(raw)
         content = data["choices"][0]["message"]["content"]
 
@@ -110,14 +142,28 @@ class OpenAISarcasmClassifier:
 def load_openai_classifier_from_env() -> OpenAISarcasmClassifier:
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip()
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    # For local OpenAI-compatible servers (LM Studio), allow a dummy/empty key.
+    # LM Studio and other local OpenAI-compatible servers use http:// and ignore the key.
     if not api_key:
-        if base_url.startswith("http://localhost") or base_url.startswith("http://127.0.0.1"):
+        parsed = urllib.parse.urlparse(base_url)
+        if parsed.scheme == "http":
             api_key = "lm-studio"
         else:
             raise RuntimeError("OPENAI_API_KEY is not set.")
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+    timeout_s = float(os.environ.get("OPENAI_TIMEOUT_S", "30").strip() or "30")
+    max_retries = int(os.environ.get("OPENAI_MAX_RETRIES", "1").strip() or "1")
+    temperature = float(os.environ.get("OPENAI_TEMPERATURE", "0").strip() or "0")
+    # OpenAI-compatible API expects base like .../v1
+    if base_url and not base_url.rstrip("/").endswith("/v1"):
+        base_url = base_url.rstrip("/") + "/v1"
     return OpenAISarcasmClassifier(
-        OpenAISarcasmConfig(api_key=api_key, model=model, base_url=base_url)
+        OpenAISarcasmConfig(
+            api_key=api_key,
+            model=model,
+            base_url=base_url,
+            timeout_s=timeout_s,
+            max_retries=max_retries,
+            temperature=temperature,
+        )
     )
 

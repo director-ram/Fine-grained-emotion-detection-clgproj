@@ -7,6 +7,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Tuple
 
+from src.llm.sarcasm_llm_prompt import SARCASM_SYSTEM_PROMPT
+
 
 @dataclass
 class GeminiSarcasmConfig:
@@ -29,13 +31,10 @@ class GeminiSarcasmClassifier:
         self.cfg = cfg
 
     def predict(self, text: str) -> Tuple[str, float]:
-        system = (
-            "You are a strict sarcasm classifier.\n"
-            "Given a single sentence, output ONLY a JSON object with keys:\n"
-            '  {"label": "sarcastic"|"non-sarcastic"}\n'
-            "No extra text."
+        prompt = (
+            f"{SARCASM_SYSTEM_PROMPT}\n\nSentence: {text}\n\n"
+            "If unsure, respond with label non-sarcastic."
         )
-        prompt = f"{system}\n\nSentence: {text}"
 
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
