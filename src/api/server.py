@@ -21,6 +21,7 @@ from src.inference.predict_multitask_sarcasm import (
 )
 from src.llm.openai_sarcasm import load_openai_classifier_from_env
 from src.llm.gemini_sarcasm import load_gemini_classifier_from_env
+from src.safety.taboo_filter import contains_taboo
 
 try:
     from dotenv import load_dotenv
@@ -154,6 +155,15 @@ def create_app(model_dir: Optional[Path] = None) -> FastAPI:
             raise HTTPException(status_code=503, detail="Model is not loaded yet.")
         if not req.text.strip():
             raise HTTPException(status_code=400, detail="Text must not be empty.")
+
+        if contains_taboo(req.text):
+            return PredictResponse(
+                sarcastic=False,
+                label="non-sarcastic",
+                score=0.0,
+                message="these words are prohibited, please don't use them",
+                source="safety",
+            )
 
         try:
             label, score = predictor.predict(req.text)  # type: ignore[attr-defined]
